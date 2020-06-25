@@ -1,0 +1,97 @@
+---
+title: Predict the quantification of how well user do a perticular activity from the
+  Weight Lifting Exercise Dataset
+author: "Amit Behura"
+date: "25/06/2020"
+output: 
+  html_document:
+    keep_md: true
+---
+### Executive Summary
+Companies use tools such as Jawbone Up, Nike FuelBand, and Fitbit, accumulating a large volume of data about individual activity relatively economically. These kinds of tools are part of the quantified self-movement – a group of practitioners who regularly take measurements about themselves to improve their health, find patterns in their behavior, or because they are tech geeks. this project required to create a prediction/classification model to identify the class of activtity from previously collected data. 
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+Here, after reading loading of the training set, Data cleaning needed to be done due to large amount of near zero variables and presence of NA values. afterwards, a feature selection is done using random forest method to come up with top twenty variables which explains the variabilty across our predictive model. then with comparison to KNN method and RandomForest method, RandomForest provided higher accuracy of 99.08 percent. lastly RandomForest method is used to predict "Classe" for given 20 test cases.
+
+in this dataset, Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). this model will predict these classes.
+
+### Loading of Datasets
+```{r,cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","pml-train.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv","pml-test.csv")
+training <- read.csv("pml-train.csv",header = TRUE, sep = ",")
+Validation <- read.csv("pml-test.csv",header = TRUE, sep = ",")
+```
+
+### Exploratory Data Analysis
+Here, we explore the dataset further and check the "classe" variable within all 19,622 observations.
+```{r}
+dim(training)
+plot(training$classe,col="red",main="Distribution of classe",ylab="Frequency",xlab="Factors")
+```
+
+
+### Preprocessing and Data cleaning
+three types of variables were excluded from the model at first. those are:  
+
+- Variable those have Near Zero Variance
+- first 6 variables, which were qualitative in nature
+- Variables with more than fifty percent presence of NA Values
+
+*For Feature Selection,* RandomForest method is used. then with respect to their importance (or ability of explaining variability) top twenty variables were selected from the plot given below. lastly subset the training set with only those twnty predictor variables and one outcome variable (i.e. "classe"). MeanDecreaseValue were calculated as importance value in this model.
+
+```{r,cache=TRUE}
+library(caret)
+library(dplyr)
+library(ggplot2)
+training <- training[-nearZeroVar(training)]
+xNA <- !as.logical(apply(training, 2, function(x){ mean(is.na(x)) >= 0.5}))
+training <- training[xNA]
+training <- training[-c(1,2,3,4,5,6)]
+library(randomForest)
+set.seed(665)
+rfModel <-randomForest(classe ~ ., data = training)
+varImpPlot(rfModel,n.var = 20)
+prex <- c( "roll_belt", "yaw_belt","pitch_forearm","magnet_dumbbell_z","pitch_belt","magnet_dumbbell_y","roll_forearm","magnet_dumbbell_x","roll_dumbbell","accel_belt_z","accel_dumbbell_y","magnet_belt_z","magnet_belt_y","accel_dumbbell_z", "accel_forearm_x","roll_arm","gyros_belt_z","magnet_forearm_z","total_accel_dumbbell","gyros_dumbbell_y","classe")
+training <- training[names(training) %in% prex]
+```
+
+### Dataset Partition 
+
+Dataset were partitioned into trainset (trainx) and testset (testx) with p=0.75
+```{r}
+library(caret)
+inTrain <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+trainx <- training[inTrain,]
+testx <- training[-inTrain,]
+```
+
+### Classification Modelling and Model Selection
+
+from widely available classification algorithm of R, I choose to go with KNN model and RandomForest model due to thier higher accuracy with larger dataset and higher speed compared to other datasets. model1 is trained with KNN model and model 2 with RandomForest. with two plots given below, accuracy of model can be observed. then with confusionMatrix, Model's predictions were crossvalidated with testset's predefined outcome to reach at the accuracy and other parameters.  
+
+model1 shows accuracy rate of : 92.58 percent
+
+model2 shows accuracy rate of : 99.08 percent
+
+model2 (RandomForest) with higher accuracy is selected for predicting later 20 test cases. 
+```{r,cache=TRUE}
+set.seed(665)
+model1 <- train(classe ~.,data=trainx, method="knn")
+plot(model1,main="Model1 (KNN)")
+confusionMatrix(testx$classe, predict(model1,testx))
+model2 <- randomForest(classe ~.,data=trainx)
+plot(model2,main="Model2 (RandomForest)")
+confusionMatrix(testx$classe, predict(model2,testx))
+```
+
+### Prediction for Test Cases
+
+Using Model2 trained above with RandomForest method is used to predict given twenty test cases. results are given in the output below.
+```{r,cache=TRUE}
+Validation <- read.csv("pml-test.csv",header = TRUE, sep = ",")
+testing <- Validation[names(Validation) %in% names(training)]
+predict_result <- predict(model2, testing)
+predict_result
+```
